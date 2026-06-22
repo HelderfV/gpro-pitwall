@@ -33,6 +33,26 @@ final class CarWearServiceTest extends TestCase
         return new CarWearService($db ?? new PDO('sqlite::memory:'), self::SECRETS);
     }
 
+    private function dbWithTrack(float $engineWear): PDO
+    {
+        $db = new PDO('sqlite::memory:');
+        $db->exec(
+            "CREATE TABLE tracks (id INTEGER PRIMARY KEY, name TEXT, laps INTEGER,
+             wear_chassis REAL, wear_engine REAL, wear_fwing REAL,
+             wear_rwing REAL, wear_underbody REAL, wear_sidepod REAL,
+             wear_cooling REAL, wear_gearbox REAL, wear_brakes REAL,
+             wear_suspension REAL, wear_electronics REAL)"
+        );
+        $db->exec(
+            "INSERT INTO tracks (id, name, laps, wear_chassis, wear_engine, wear_fwing,
+             wear_rwing, wear_underbody, wear_sidepod, wear_cooling, wear_gearbox,
+             wear_brakes, wear_suspension, wear_electronics)
+             VALUES (1, 'Testopolis', 50, 0, {$engineWear}, 0, 0, 0, 0, 0, 0, 0, 0, 0)"
+        );
+
+        return $db;
+    }
+
     public function testDriverFactorIsExponentialProductOfThreeAttributes(): void
     {
         $factor = $this->service()->driverFactor([
@@ -131,6 +151,37 @@ final class CarWearServiceTest extends TestCase
         );
 
         $this->assertArrayHasKey('error', $result);
+    }
+
+    public function testCalculateWearUsesCurrentPartLevelAndWearByDefault(): void
+    {
+        $result = $this->service($this->dbWithTrack(10.0))->calculateWear(
+            ['id' => 0, 'name' => 'Testopolis', 'laps' => null],
+            ['lvlEngine' => 5, 'usaEngine' => 20],
+            [],
+            0,
+        );
+
+        $this->assertSame(5, $result['parts']['Engine']['level']);
+        $this->assertSame(20, $result['parts']['Engine']['start']);
+        $this->assertSame(10.0, $result['parts']['Engine']['est']);
+        $this->assertSame(30.0, $result['parts']['Engine']['end']);
+    }
+
+    public function testCalculateWearAppliesPartOverrideBeforeProjection(): void
+    {
+        $result = $this->service($this->dbWithTrack(4.0))->calculateWear(
+            ['id' => 0, 'name' => 'Testopolis', 'laps' => null],
+            ['lvlEngine' => 9, 'usaEngine' => 20],
+            [],
+            10,
+            ['Engine' => ['level' => 1, 'start' => 40]],
+        );
+
+        $this->assertSame(1, $result['parts']['Engine']['level']);
+        $this->assertSame(40, $result['parts']['Engine']['start']);
+        $this->assertSame(6.5, $result['parts']['Engine']['est']);
+        $this->assertSame(46.5, $result['parts']['Engine']['end']);
     }
 
     public function testTestingWearRatesScaleFullRaceBaseByLapsDriverAndTestingFactor(): void

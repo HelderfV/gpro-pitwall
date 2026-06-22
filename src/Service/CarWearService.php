@@ -98,13 +98,15 @@ class CarWearService
      * @param array<string, mixed> $trackData
      * @param array<string, mixed> $carData
      * @param array<string, mixed> $driver
+     * @param array<string, array{level: int, start: int}> $partOverrides
      * @return array<string, mixed>
      */
     public function calculateWear(
         array $trackData,
         array $carData,
         array $driver,
-        int $risk
+        int $risk,
+        array $partOverrides = [],
     ): array {
         $trackId = $trackData['id'] ?? 0;
 
@@ -129,8 +131,9 @@ class CarWearService
         $results = [];
         foreach (self::PARTS_MAP as $label => $map) {
             $trackBase = (float) ($trackDb[$map['db']] ?? 0.0);
-            $level     = (int) ($carData[$map['lvl']] ?? 1);
-            $startWear = (int) ($carData[$map['wear']] ?? 0);
+            $override  = $partOverrides[$label] ?? null;
+            $level     = (int) ($override['level'] ?? $carData[$map['lvl']] ?? 1);
+            $startWear = (int) ($override['start'] ?? $carData[$map['wear']] ?? 0);
             $end       = $this->projectEndWear($trackBase, $level, (float) $startWear, $driverFactor, $risk);
 
             $results[$label] = [

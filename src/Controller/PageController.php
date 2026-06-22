@@ -393,26 +393,26 @@ class PageController
                 break;
 
             case 'Car Wear':
-                // Auto-populate on first visit (mirrors Race Strategy). The
-                // calc reads exactly what GproApiClient has already cached
-                // for the cockpit pass, so no extra API call is spent.
-                $existing = $_SESSION['wear_results'] ?? null;
+                // Rebuild from cached API data and saved selections on every
+                // tab open. This keeps the part dropdowns and table aligned
+                // after fragment refreshes or manual override edits.
+                $wearInputs = $_SESSION['wear_inputs'] ?? [];
+                $wearInputs = is_array($wearInputs) ? $wearInputs : [];
+                $risk = max(0, min(100, (int) ($wearInputs['risk'] ?? 0)));
+                $storedParts = $wearInputs['parts'] ?? [];
+                $storedParts = is_array($storedParts) ? $storedParts : [];
 
-                if (!is_array($existing)) {
-                    $risk = (int) ($_SESSION['wear_inputs']['risk'] ?? 0);
-                    $this->apiClient->setToken($user['api_token']);
-                    $result = $this->carWearController->runCalc($risk);
-                    if (isset($result['error'])) {
-                        $viewData['wear_error'] = $result['error'];
-                    } else {
-                        $viewData['wear_results'] = $result['results'];
-                        $_SESSION['wear_inputs'] = [
-                            'risk'   => $risk,
-                            'driver' => $result['driver'],
-                        ];
-                    }
+                $this->apiClient->setToken($user['api_token']);
+                $result = $this->carWearController->runCalc($risk, $storedParts);
+                if (isset($result['error'])) {
+                    $viewData['wear_error'] = $result['error'];
+                    $_SESSION['wear_error'] = $result['error'];
                 } else {
-                    $viewData['wear_results'] = $existing;
+                    $viewData['wear_results'] = $result['results'];
+                    $viewData['wear_part_choices'] = $result['part_choices'];
+                    $_SESSION['wear_results'] = $result['results'];
+                    $_SESSION['wear_inputs'] = $result['inputs'];
+                    $_SESSION['wear_error'] = null;
                 }
 
                 $viewData['wear_inputs'] = $_SESSION['wear_inputs'] ?? [];
